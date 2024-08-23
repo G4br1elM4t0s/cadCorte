@@ -1,9 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
 const RectangleScene: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
+  const [transformControls, setTransformControls] = useState<TransformControls | null>(null);
 
   useEffect(() => {
     const scene = new THREE.Scene();
@@ -16,7 +18,6 @@ const RectangleScene: React.FC = () => {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // Adicionando luz à cena
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
@@ -24,65 +25,79 @@ const RectangleScene: React.FC = () => {
     directionalLight.position.set(10, 10, 10);
     scene.add(directionalLight);
 
-    // Dimensões do retângulo
+    const gridHelper = new THREE.GridHelper(20, 20);
+    scene.add(gridHelper);
+
+    const axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
+
+    // Criando a geometria extrudada com o corte
     const width = 8.95;
     const height = 0.58;
     const depth = 8.0;
 
-    // Definindo os pontos da geometria personalizada com corte em 45 graus
     const shape = new THREE.Shape();
-    shape.moveTo(0, 0);                // Vértice inferior esquerdo
-    shape.lineTo(width  , 0);           // Vértice inferior direito // esse aplica
-    shape.lineTo(width, height);             // Vértice superior direito
-    shape.lineTo(height, height);                 // Vértice superior esquerdo // esse aplica...
-    shape.lineTo(0,0);         // Vértice onde começa o corte em 45 graus
-    shape.lineTo(depth , 0);                  // Vértice inferior esquerdo após o corte
-    shape.lineTo(0, 0);                      // Fechando o shape
+    shape.moveTo(0, 0); // Vértice inferior esquerdo
+    shape.lineTo(width, 0); // Vértice inferior direito
+    shape.lineTo(width, height); // Vértice superior direito
+    shape.lineTo(height, height); // Vértice superior esquerdo
+    shape.lineTo(0, 0); // Vértice onde começa o corte em 45 graus
+    shape.lineTo(depth, 0); // Vértice inferior esquerdo após o corte
+    shape.lineTo(0, 0); // Fechando o shape
 
     const extrudeSettings = {
       depth: depth,
-      bevelEnabled: false
+      bevelEnabled: false,
     };
 
-    // Criando a geometria extrudada com o corte
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
     const mesh = new THREE.Mesh(geometry, material);
-    console.log(mesh.position.x,mesh.position.y, mesh.position.z)
-
-    // mesh.rotation.y = -Math.PI / 2;
-
-    console.log(mesh.position.x,mesh.position.y, mesh.position.z)
-    // mesh.position.x = 8
-    // mesh.position.y = 0
-    // mesh.position.z = 0
     scene.add(mesh);
-    // Adicionando os auxiliares de grade e eixos
-    const axesHelper = new THREE.AxesHelper(10);
-    scene.add(axesHelper);
 
-    const gridHelper = new THREE.GridHelper(20, 20);
-    scene.add(gridHelper);
+    // Adicionando TransformControls
+    const transformControl = new TransformControls(camera, renderer.domElement);
+    transformControl.attach(mesh);
+    scene.add(transformControl);
+    setTransformControls(transformControl);
 
-    // Ajustar a posição da câmera
     camera.position.set(0, 5, 15);
     camera.lookAt(scene.position);
 
-    // Animação para renderizar a cena
     const animate = () => {
       requestAnimationFrame(animate);
       controls.update();
+      // transformControl.update();
       renderer.render(scene, camera);
     };
 
     animate();
 
     return () => {
-      mountRef.current!.removeChild(renderer.domElement);
+      if (mountRef.current && renderer.domElement.parentElement) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      transformControl.dispose();
     };
   }, []);
 
-  return <div ref={mountRef}></div>;
+  const handleSetModeTranslate = () => {
+    transformControls?.setMode('translate');
+  };
+
+  const handleSetModeRotate = () => {
+    transformControls?.setMode('rotate');
+  };
+
+  return (
+    <>
+      <div ref={mountRef}></div>
+      <div style={{ position: 'absolute', top: '10px', left: '10px' }}>
+        <button onClick={handleSetModeTranslate}>Mover</button>
+        <button onClick={handleSetModeRotate}>Rotacionar</button>
+      </div>
+    </>
+  );
 };
 
 export default RectangleScene;

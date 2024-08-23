@@ -1,12 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
+import { SUBTRACTION, Brush, Evaluator } from 'three-bvh-csg';
 
 const RectangleScene: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-
+  const [mainMesh, setMainMesh] = useState<THREE.Mesh | null>(null);
+  const [cutterMesh, setCutterMesh] = useState<THREE.Mesh | null>(null);
   useEffect(() => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -20,8 +22,8 @@ const RectangleScene: React.FC = () => {
 
     // Dimensões do retângulo 3D (caixa)
     const width = 8.95;
-    const height = 2.58;
-    const depth = 1.0; // Adicionando profundidade
+    const height = 0.58;
+    const depth = 8.0;
 
     // Criando materiais para cada face
     const faceMaterials = [
@@ -33,11 +35,14 @@ const RectangleScene: React.FC = () => {
       new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // Direita
     ];
 
-    // Criando a caixa (objeto 3D) com materiais diferentes para cada face
-    const geometry = new THREE.BoxGeometry(width, height, depth);
-    const box = new THREE.Mesh(geometry, faceMaterials);
-    scene.add(box);
+    const mainBrush = new Brush(new THREE.BoxGeometry(width, height, depth), faceMaterials);
+    mainBrush.updateMatrixWorld(true);
 
+    // Criando a caixa (objeto 3D) com materiais diferentes para cada face
+    // const geometry = new THREE.BoxGeometry(width, height, depth);
+    const box = new THREE.Mesh(mainBrush.geometry, faceMaterials);
+    scene.add(box);
+    setMainMesh(box)
     // Raycaster e vetor do mouse para detecção de interseção
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -89,6 +94,72 @@ const RectangleScene: React.FC = () => {
           // Se não está clicado, adicionar à lista e manter a cor
           clickedFaces.add(intersectedFaceIndex);
           faceMaterials[intersectedFaceIndex].color.set(0xff0000); // Cor permanente ao clicar
+
+          // Criar e posicionar a nova caixa
+          let smallBox;
+          const smallBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+
+          if (intersectedFaceIndex === 4) { // Frente
+            smallBox = new THREE.Mesh(
+              new THREE.BoxGeometry(width, height,1.3),
+              smallBoxMaterial
+            );
+            smallBox.position.set(0, 0, depth/3 + 1.3);
+            smallBox.rotation.x = THREE.MathUtils.degToRad(45);
+            // smallBox.updateMatrixWorld();
+            const mainBrush = new Brush(mainMesh?.geometry);
+            const cutterBrush = new Brush(cutterMesh.geometry);
+
+
+            // // Atualizar a geometria original para corte
+            // box.updateMatrixWorld();
+  
+            // // Executar a subtração CSG
+            // const evaluator = new Evaluator();
+            // const result = evaluator.evaluate(box, smallBox, SUBTRACTION);
+  
+            // // Substituir a geometria original pela nova geometria cortada
+            // scene.remove(boxMesh);
+            // boxMesh.geometry.dispose();
+            // boxMesh.geometry = Brush.toMesh(result, faceMaterials).geometry;
+            // scene.add(boxMesh);
+          } else if (intersectedFaceIndex === 5) { // Trás
+            smallBox = new THREE.Mesh(
+              new THREE.BoxGeometry(width, height, depth / 2),
+              smallBoxMaterial
+            );
+            smallBox.position.set(0, 0, -(depth / 2 + depth / 4));
+          } else if (intersectedFaceIndex === 3) { // Topo
+            smallBox = new THREE.Mesh(
+              // new THREE.BoxGeometry(width, height / 2, depth),
+              // smallBoxMaterial
+              new THREE.BoxGeometry(width / 2, height, depth),
+              smallBoxMaterial
+            );
+            smallBox.position.set(0, height / 2 + height / 4, 0);
+          } else if (intersectedFaceIndex === 1) { // Fundo
+            smallBox = new THREE.Mesh(
+              new THREE.BoxGeometry(width, height / 2, depth),
+              smallBoxMaterial
+            );
+            smallBox.position.set(0, -(height / 2 + height / 4), 0);
+          } else if (intersectedFaceIndex === 0) { // Esquerda
+            smallBox = new THREE.Mesh(
+              new THREE.BoxGeometry(width / 4, height, depth),
+              smallBoxMaterial
+            );
+            smallBox.position.set(-(width / 2 + width / 4), 0, 0);
+          } else if (intersectedFaceIndex === 2) { // Direita
+            smallBox = new THREE.Mesh(
+              new THREE.BoxGeometry(width / 2, height, depth),
+              smallBoxMaterial
+            );
+            smallBox.position.set(width / 2 + width / 4, 0, 0);
+          }
+
+          if (smallBox) {
+            scene.add(smallBox);
+          }
         }
       }
     };
@@ -96,54 +167,6 @@ const RectangleScene: React.FC = () => {
     // Adicionando eventos de movimento e clique do mouse
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('click', onClick);
-
-    // Adicionando vértices (bolinhas)
-    const vertexMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const vertexGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-
-    const positionArray = geometry.attributes.position.array;
-    const vertices: THREE.Vector3[] = [];
-
-    for (let i = 0; i < positionArray.length; i += 3) {
-      const vertex = new THREE.Vector3(positionArray[i], positionArray[i + 1], positionArray[i + 2]);
-      vertices.push(vertex);
-      const vertexMesh = new THREE.Mesh(vertexGeometry, vertexMaterial);
-      vertexMesh.position.copy(vertex);
-      scene.add(vertexMesh);
-    }
-
-    // Adicionando linhas-guia (edges)
-    const edges = new THREE.EdgesGeometry(geometry);
-    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-    const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
-    scene.add(edgeLines);
-
-    // Adicionando réguas (medidas)
-    const drawRuler = (start: THREE.Vector3, end: THREE.Vector3, label: string) => {
-      const midPoint = new THREE.Vector3().lerpVectors(start, end, 0.5);
-
-      const rulerGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-      const rulerLine = new THREE.Line(rulerGeometry, edgeMaterial);
-      scene.add(rulerLine);
-
-      const loader = new FontLoader();
-      loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
-        const textGeometry = new TextGeometry(label, {
-          font,
-          size: 0.2,
-          height: 0.05,
-        });
-        const textMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-        textMesh.position.copy(midPoint);
-        scene.add(textMesh);
-      });
-    };
-
-    // Desenhando as réguas
-    drawRuler(vertices[0], vertices[1], `${width.toFixed(2)} m`);
-    drawRuler(vertices[1], vertices[5], `${depth.toFixed(2)} m`);
-    drawRuler(vertices[1], vertices[2], `${height.toFixed(2)} m`);
 
     camera.position.z = 15;
 
