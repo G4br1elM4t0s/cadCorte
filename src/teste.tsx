@@ -1,29 +1,35 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { FontLoader } from 'three/examples/jsm/loaders/FontLoader';
-import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry';
-import { SUBTRACTION, Brush, Evaluator } from 'three-bvh-csg';
 
 const RectangleScene: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [mainMesh, setMainMesh] = useState<THREE.Mesh | null>(null);
-  const [cutterMesh, setCutterMesh] = useState<THREE.Mesh | null>(null);
+  const [medida, setMedida] = useState<number | null>(null);
+  const [eixo, setEixo] = useState<string | null>(null);
+
   useEffect(() => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(window.innerWidth - 200, window.innerHeight);
     mountRef.current!.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
+    // Adicionando GridHelper
+    const gridHelper = new THREE.GridHelper(100, 100);
+    scene.add(gridHelper);
+
+    // Adicionando AxesHelper
+    const axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
+
     // Dimensões do retângulo 3D (caixa)
     const width = 8.95;
     const height = 0.58;
-    const depth = 8.0;
+    const depth = 4.0;
 
     // Criando materiais para cada face
     const faceMaterials = [
@@ -35,131 +41,176 @@ const RectangleScene: React.FC = () => {
       new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // Direita
     ];
 
-    const mainBrush = new Brush(new THREE.BoxGeometry(width, height, depth), faceMaterials);
-    mainBrush.updateMatrixWorld(true);
-
     // Criando a caixa (objeto 3D) com materiais diferentes para cada face
-    // const geometry = new THREE.BoxGeometry(width, height, depth);
-    const box = new THREE.Mesh(mainBrush.geometry, faceMaterials);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), faceMaterials);
+
+    // Posicionando o retângulo no centro da cena
+    // box.position.set(width / 2, height / 2, depth / 2);
+    box.position.set(0, 0, 0);
+
+    // Array para armazenar as esferas (vértices)
+    const spheres: THREE.Mesh[] = [];
+
+    // Adicionando esferas azuis nos vértices como filhos da caixa
+    const sphereGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+    const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+
+    const vertices = [
+      [-width / 2, -height / 2, -depth / 2],
+      [width / 2, -height / 2, -depth / 2],
+      [-width / 2, height / 2, -depth / 2],
+      [width / 2, height / 2, -depth / 2],
+      [-width / 2, -height / 2, depth / 2],
+      [width / 2, -height / 2, depth / 2],
+      [-width / 2, height / 2, depth / 2],
+      [width / 2, height / 2, depth / 2],
+    ];
+
+    vertices.forEach(vertex => {
+      const sphere = new THREE.Mesh(sphereGeometry.clone(), sphereMaterial.clone());
+      sphere.position.set(vertex[0], vertex[1], vertex[2]);
+      sphere.position.add(box.position);  // Ajuste para garantir que as esferas estejam em relação ao centro da cena
+      spheres.push(sphere); // Armazenando a esfera para detecção de interseção
+      scene.add(sphere);    // Adicionando a esfera diretamente à cena
+    });
+
     scene.add(box);
-    setMainMesh(box)
+
     // Raycaster e vetor do mouse para detecção de interseção
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    let intersectedFaceIndex: number | null = null;
-    const clickedFaces: Set<number> = new Set();
+    let intersectedSphere: THREE.Mesh | null = null;
+    const selectedSpheres: THREE.Mesh[] = [];
 
     // Função para detectar o movimento do mouse
     const onMouseMove = (event: MouseEvent) => {
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+      mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
 
-      const intersects = raycaster.intersectObject(box);
+      const intersects = raycaster.intersectObjects(spheres);
 
       if (intersects.length > 0) {
-        const intersect = intersects[0];
-        const faceIndex = Math.floor(intersect.faceIndex! / 2);
+        const intersect = intersects[0].object as THREE.Mesh;
 
-        if (intersectedFaceIndex !== faceIndex && !clickedFaces.has(faceIndex)) {
-          // Resetar a cor da face anterior
-          if (intersectedFaceIndex !== null && !clickedFaces.has(intersectedFaceIndex)) {
-            faceMaterials[intersectedFaceIndex].color.set(0x00ff00);
+        if (intersectedSphere !== intersect) {
+          // Resetar a cor da esfera anterior (se não estiver selecionada)
+          if (intersectedSphere && !selectedSpheres.includes(intersectedSphere)) {
+            intersectedSphere.material.color.set(0x0000ff);
           }
 
-          // Alterar a cor da face atual
-          intersectedFaceIndex = faceIndex;
-          if (!clickedFaces.has(faceIndex)) {
-            faceMaterials[intersectedFaceIndex].color.set(0xffff00);
+          // Alterar a cor da esfera atual
+          intersectedSphere = intersect;
+          if (!selectedSpheres.includes(intersect)) {
+            intersect.material.color.set(0xffff00);
           }
         }
       } else {
-        if (intersectedFaceIndex !== null && !clickedFaces.has(intersectedFaceIndex)) {
-          faceMaterials[intersectedFaceIndex].color.set(0x00ff00);
-          intersectedFaceIndex = null;
+        // Resetar a cor da esfera anterior (se não estiver selecionada)
+        if (intersectedSphere && !selectedSpheres.includes(intersectedSphere)) {
+          intersectedSphere.material.color.set(0x0000ff);
         }
+        intersectedSphere = null;
       }
     };
 
     // Função para detectar cliques do mouse
     const onClick = () => {
-      if (intersectedFaceIndex !== null) {
-        if (clickedFaces.has(intersectedFaceIndex)) {
-          // Se já está clicado, remover da lista e resetar a cor
-          clickedFaces.delete(intersectedFaceIndex);
-          faceMaterials[intersectedFaceIndex].color.set(0x00ff00);
+      if (intersectedSphere !== null) {
+        if (selectedSpheres.includes(intersectedSphere)) {
+          // Se a esfera já está selecionada, desmarcá-la
+          intersectedSphere.material.color.set(0x0000ff);
+          selectedSpheres.splice(selectedSpheres.indexOf(intersectedSphere), 1);
         } else {
-          // Se não está clicado, adicionar à lista e manter a cor
-          clickedFaces.add(intersectedFaceIndex);
-          faceMaterials[intersectedFaceIndex].color.set(0xff0000); // Cor permanente ao clicar
-
-          // Criar e posicionar a nova caixa
-          let smallBox;
-          const smallBoxMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-
-          if (intersectedFaceIndex === 4) { // Frente
-            smallBox = new THREE.Mesh(
-              new THREE.BoxGeometry(width, height,1.3),
-              smallBoxMaterial
-            );
-            smallBox.position.set(0, 0, depth/3 + 1.3);
-            smallBox.rotation.x = THREE.MathUtils.degToRad(45);
-            // smallBox.updateMatrixWorld();
-            const mainBrush = new Brush(mainMesh?.geometry);
-            const cutterBrush = new Brush(cutterMesh.geometry);
-
-
-            // // Atualizar a geometria original para corte
-            // box.updateMatrixWorld();
-  
-            // // Executar a subtração CSG
-            // const evaluator = new Evaluator();
-            // const result = evaluator.evaluate(box, smallBox, SUBTRACTION);
-  
-            // // Substituir a geometria original pela nova geometria cortada
-            // scene.remove(boxMesh);
-            // boxMesh.geometry.dispose();
-            // boxMesh.geometry = Brush.toMesh(result, faceMaterials).geometry;
-            // scene.add(boxMesh);
-          } else if (intersectedFaceIndex === 5) { // Trás
-            smallBox = new THREE.Mesh(
-              new THREE.BoxGeometry(width, height, depth / 2),
-              smallBoxMaterial
-            );
-            smallBox.position.set(0, 0, -(depth / 2 + depth / 4));
-          } else if (intersectedFaceIndex === 3) { // Topo
-            smallBox = new THREE.Mesh(
-              // new THREE.BoxGeometry(width, height / 2, depth),
-              // smallBoxMaterial
-              new THREE.BoxGeometry(width / 2, height, depth),
-              smallBoxMaterial
-            );
-            smallBox.position.set(0, height / 2 + height / 4, 0);
-          } else if (intersectedFaceIndex === 1) { // Fundo
-            smallBox = new THREE.Mesh(
-              new THREE.BoxGeometry(width, height / 2, depth),
-              smallBoxMaterial
-            );
-            smallBox.position.set(0, -(height / 2 + height / 4), 0);
-          } else if (intersectedFaceIndex === 0) { // Esquerda
-            smallBox = new THREE.Mesh(
-              new THREE.BoxGeometry(width / 4, height, depth),
-              smallBoxMaterial
-            );
-            smallBox.position.set(-(width / 2 + width / 4), 0, 0);
-          } else if (intersectedFaceIndex === 2) { // Direita
-            smallBox = new THREE.Mesh(
-              new THREE.BoxGeometry(width / 2, height, depth),
-              smallBoxMaterial
-            );
-            smallBox.position.set(width / 2 + width / 4, 0, 0);
+          // Se o máximo de 4 esferas já está selecionado, desmarcar a mais antiga
+          if (selectedSpheres.length >= 4) {
+            const oldestSphere = selectedSpheres.shift()!;
+            oldestSphere.material.color.set(0x0000ff);
           }
 
-          if (smallBox) {
-            scene.add(smallBox);
+          // Selecionar a nova esfera
+          selectedSpheres.push(intersectedSphere);
+          intersectedSphere.material.color.set(0xff0000); // Cor permanente ao clicar
+        }
+
+        // Se 4 esferas estão selecionadas, calcular e mostrar a maior distância ao longo de qualquer eixo
+        if (selectedSpheres.length === 4) {
+          const p1 = selectedSpheres[0].position;
+          const p2 = selectedSpheres[1].position;
+          const p3 = selectedSpheres[2].position;
+          const p4 = selectedSpheres[3].position;
+          let newBoxGeometry;
+
+          // Calculate the centroid of the selected vertices
+          const centroid = new THREE.Vector3();
+          selectedSpheres.forEach(sphere => centroid.add(sphere.position));
+          centroid.divideScalar(4);
+        
+          // Calculate the vectors defining the plane
+          const v1 = new THREE.Vector3().subVectors(p2, p1);
+          const v2 = new THREE.Vector3().subVectors(p3, p1);
+          const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+        
+          // Determine which face is selected based on the normal and centroid
+          let face = '';
+        
+  
+        
+          // The rest of your existing logic (creating and positioning the new box)
+          const xDistance = Math.max(
+            ...selectedSpheres.map((sphere, i) => selectedSpheres.slice(i + 1).map(other => Math.abs(sphere.position.x - other.position.x)))
+            .flat()
+          );
+          const zDistance = Math.max(
+            ...selectedSpheres.map((sphere, i) => selectedSpheres.slice(i + 1).map(other => Math.abs(sphere.position.z - other.position.z)))
+            .flat()
+          );
+        
+          if (xDistance >= zDistance) {
+            newBoxGeometry = new THREE.BoxGeometry(xDistance, height, 1.5);
+          } else {
+            newBoxGeometry = new THREE.BoxGeometry(1.5, height, zDistance);
           }
+        
+          const newBoxMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+          const newBox = new THREE.Mesh(newBoxGeometry, newBoxMaterial);
+        
+          // Position the new box in front of the plane
+          const distance = 0.4;
+          const newPosition = new THREE.Vector3().addVectors(centroid, normal.multiplyScalar(distance));
+          newBox.position.copy(newPosition);
+          if (Math.abs(normal.z) > Math.abs(normal.x)) {
+            // Dominant axis is Z
+            if (normal.z < 0) {
+              // rotate the box
+              console.log(normal.z)
+              newBox.rotation.x = THREE.MathUtils.degToRad(45);
+              face = 'Frente';
+            } else {
+              console.log(normal.z)
+              newBox.rotation.x = THREE.MathUtils.degToRad(135);
+              face = 'Trás';
+            }
+          } else {
+            // Dominant axis is X
+            if (normal.x > 0) {
+              face = 'Direita';
+            } else {
+              face = 'Esquerda';
+            }
+          }
+        
+          console.log(`A face selecionada é a: ${face}`);
+
+        
+          // Add the new box to the scene
+          scene.add(newBox);
+        }
+         else {
+          setMedida(null); // Reseta a medida quando menos de 4 esferas são selecionadas
+          setEixo(null);
         }
       }
     };
@@ -185,7 +236,18 @@ const RectangleScene: React.FC = () => {
     };
   }, []);
 
-  return <div ref={mountRef}></div>;
+  return (
+    <div>
+      <div ref={mountRef}></div>
+      <div>
+        {medida !== null && eixo && (
+          <p>
+            <strong>{eixo} da seleção:</strong> {medida.toFixed(2)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default RectangleScene;
