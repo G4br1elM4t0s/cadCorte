@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import React, { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const RectangleScene: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -9,7 +9,12 @@ const RectangleScene: React.FC = () => {
 
   useEffect(() => {
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
     const renderer = new THREE.WebGLRenderer({ antialias: true });
 
     renderer.setSize(window.innerWidth - 200, window.innerHeight);
@@ -42,7 +47,10 @@ const RectangleScene: React.FC = () => {
     ];
 
     // Criando a caixa (objeto 3D) com materiais diferentes para cada face
-    const box = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), faceMaterials);
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      faceMaterials
+    );
 
     // Posicionando o retângulo no centro da cena
     // box.position.set(width / 2, height / 2, depth / 2);
@@ -66,12 +74,15 @@ const RectangleScene: React.FC = () => {
       [width / 2, height / 2, depth / 2],
     ];
 
-    vertices.forEach(vertex => {
-      const sphere = new THREE.Mesh(sphereGeometry.clone(), sphereMaterial.clone());
+    vertices.forEach((vertex) => {
+      const sphere = new THREE.Mesh(
+        sphereGeometry.clone(),
+        sphereMaterial.clone()
+      );
       sphere.position.set(vertex[0], vertex[1], vertex[2]);
-      sphere.position.add(box.position);  // Ajuste para garantir que as esferas estejam em relação ao centro da cena
+      sphere.position.add(box.position); // Ajuste para garantir que as esferas estejam em relação ao centro da cena
       spheres.push(sphere); // Armazenando a esfera para detecção de interseção
-      scene.add(sphere);    // Adicionando a esfera diretamente à cena
+      scene.add(sphere); // Adicionando a esfera diretamente à cena
     });
 
     scene.add(box);
@@ -97,7 +108,10 @@ const RectangleScene: React.FC = () => {
 
         if (intersectedSphere !== intersect) {
           // Resetar a cor da esfera anterior (se não estiver selecionada)
-          if (intersectedSphere && !selectedSpheres.includes(intersectedSphere)) {
+          if (
+            intersectedSphere &&
+            !selectedSpheres.includes(intersectedSphere)
+          ) {
             intersectedSphere.material.color.set(0x0000ff);
           }
 
@@ -132,6 +146,7 @@ const RectangleScene: React.FC = () => {
 
           // Selecionar a nova esfera
           selectedSpheres.push(intersectedSphere);
+          //@ts-ignore
           intersectedSphere.material.color.set(0xff0000); // Cor permanente ao clicar
         }
 
@@ -145,70 +160,85 @@ const RectangleScene: React.FC = () => {
 
           // Calculate the centroid of the selected vertices
           const centroid = new THREE.Vector3();
-          selectedSpheres.forEach(sphere => centroid.add(sphere.position));
+          selectedSpheres.forEach((sphere) => centroid.add(sphere.position));
           centroid.divideScalar(4);
-        
+
           // Calculate the vectors defining the plane
           const v1 = new THREE.Vector3().subVectors(p2, p1);
           const v2 = new THREE.Vector3().subVectors(p3, p1);
           const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
-        
+
           // Determine which face is selected based on the normal and centroid
-          let face = '';
-        
-  
-        
+          let face = "";
+
           // The rest of your existing logic (creating and positioning the new box)
           const xDistance = Math.max(
-            ...selectedSpheres.map((sphere, i) => selectedSpheres.slice(i + 1).map(other => Math.abs(sphere.position.x - other.position.x)))
-            .flat()
+            ...selectedSpheres
+              .map((sphere, i) =>
+                selectedSpheres
+                  .slice(i + 1)
+                  .map((other) =>
+                    Math.abs(sphere.position.x - other.position.x)
+                  )
+              )
+              .flat()
           );
           const zDistance = Math.max(
-            ...selectedSpheres.map((sphere, i) => selectedSpheres.slice(i + 1).map(other => Math.abs(sphere.position.z - other.position.z)))
-            .flat()
+            ...selectedSpheres
+              .map((sphere, i) =>
+                selectedSpheres
+                  .slice(i + 1)
+                  .map((other) =>
+                    Math.abs(sphere.position.z - other.position.z)
+                  )
+              )
+              .flat()
           );
-        
+
           if (xDistance >= zDistance) {
             newBoxGeometry = new THREE.BoxGeometry(xDistance, height, 1.5);
           } else {
             newBoxGeometry = new THREE.BoxGeometry(1.5, height, zDistance);
           }
-        
-          const newBoxMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+          const newBoxMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+          });
           const newBox = new THREE.Mesh(newBoxGeometry, newBoxMaterial);
-        
+
           // Position the new box in front of the plane
           const distance = 0.4;
-          const newPosition = new THREE.Vector3().addVectors(centroid, normal.multiplyScalar(distance));
+          const newPosition = new THREE.Vector3().addVectors(
+            centroid,
+            normal.multiplyScalar(distance)
+          );
           newBox.position.copy(newPosition);
           if (Math.abs(normal.z) > Math.abs(normal.x)) {
             // Dominant axis is Z
             if (normal.z < 0) {
               // rotate the box
-              console.log(normal.z)
+              console.log(normal.z);
               newBox.rotation.x = THREE.MathUtils.degToRad(45);
-              face = 'Frente';
+              face = "Frente";
             } else {
-              console.log(normal.z)
+              console.log(normal.z);
               newBox.rotation.x = THREE.MathUtils.degToRad(135);
-              face = 'Trás';
+              face = "Trás";
             }
           } else {
             // Dominant axis is X
             if (normal.x > 0) {
-              face = 'Direita';
+              face = "Direita";
             } else {
-              face = 'Esquerda';
+              face = "Esquerda";
             }
           }
-        
+
           console.log(`A face selecionada é a: ${face}`);
 
-        
           // Add the new box to the scene
           scene.add(newBox);
-        }
-         else {
+        } else {
           setMedida(null); // Reseta a medida quando menos de 4 esferas são selecionadas
           setEixo(null);
         }
@@ -216,8 +246,8 @@ const RectangleScene: React.FC = () => {
     };
 
     // Adicionando eventos de movimento e clique do mouse
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('click', onClick);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("click", onClick);
 
     camera.position.z = 15;
 
@@ -231,8 +261,8 @@ const RectangleScene: React.FC = () => {
 
     return () => {
       mountRef.current!.removeChild(renderer.domElement);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('click', onClick);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("click", onClick);
     };
   }, []);
 
